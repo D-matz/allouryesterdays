@@ -1,26 +1,288 @@
-var key = "RGAPI-f0766717-fd9d-4c01-9ebb-fbffd993cf6d";
+var key = "key";
 var tmi = require('tmi.js'); //what does this do? I don't know. Ask this guy https://www.youtube.com/watch?v=K6N9dSMb7sM
 const https = require('https');
 var shell = require('shelljs'); //to run curl. this might not be necessary if I knew what I was doing or the internet was helpful
 var robot = require("robotjs"); //actually amazing this exists, lets the program move mouse/type keys as if you were doing it yourself
+const fs = require('fs') //check if file exists
 
-var pidToWatch = ['1','2','3','4,','5','q','w','e','r','t']; //remember pick order ty DrCyanide (NA)
+var pidToWatch = ['1','2','3','4','5','q','w','e','r','t']; //remember pick order ty DrCyanide (NA)
 var leftOfTime = 509; //quality scaleable code to determine where to put the cursor on the timeline
 var rightOfTime = 1013;
+var minX = 1220;
+var minY = 681;
+var maxX = 1430;
+var maxY = 887;
 
-function quitGame() //hits escape clicks exit then exit again
+var nameQueue = []; //to manage multiple requests
+var regionQueue = [];
+var gameQueue = [];
+var userQueue = []; //maybe no spammers
+var inGame = false;
+
+function parse(name,region,game)
 {
-  console.log("quitting");
-  robot.keyToggle("command","down");
-  robot.keyToggle("alt","down");
-  robot.keyToggle("escape","down");
+  //  console.log(str);
+  /*  var end = str.indexOf('/');
+    name = str.substring(0,end);
+    str = str.substring(end+1);
+    end = str.indexOf('/');
+    if(end<0)
+    {
+      region = str;
+      game = 1;
+    }
+    else
+    {
+      region = str.substring(0,end);
+      str = str.substring(end+1);
+      game = parseInt(str);
+    }
+    if(region=="na"||region=="north america"||region=="northamerica")
+    {
+      region = "NA1"
+    }
+    else if(region=="euw")
+    {
+      region = "EUW1"
+    }
+    else if(region=="eun")
+    {
+      region = "EUN1"
+    }
+    else if(region=="br")
+    {
+      region = "BR1"
+    }
+    else if(region=="oce")
+    {
+      region = "OCE1"
+    }
+    else if(region=="jp")
+    {
+      region = "JP1"
+    }
+    else if(region=="tr")
+    {
+      region = "TR1"
+    }
+    else if(region=="la"||region=="lan")
+    {
+      region = "la2"
+    }*/
+    //console.log(game+" "+region+" "+name);
+    //get the account v
+    https.get("https://"+region+".api.riotgames.com/lol/summoner/v4/summoners/by-name/"+name+"?api_key="+key, (resp) => {
+      let data = '';
+      resp.on('data', (chunk) => {
+        data += chunk;
+      });
+      resp.on('end', () => {
+        var accId = JSON.parse(data).accountId;
+        if(accId == undefined)
+        {
+          client.action("allouryesterdays", "Usage: !death scarra or !death scarra/7");
+        }
+        else if(game<1)
+        {
+          client.action("allouryesterdays", "1 or more games ago, can't input <1");
+        }
+        else
+        {
+          //get the matchlist v
+          https.get("https://"+region+".api.riotgames.com/lol/match/v4/matchlists/by-account/"+accId+"?queue=420&endIndex="+game+"&beginIndex="+(game-1)+"&api_key="+key, (resp) => {
+            let data = '';
+            resp.on('data', (chunk) => {
+              data += chunk;
+            });
+            resp.on('end', () => {
+              var deathTimers = [];
+              var mortal = false;
+              if(JSON.parse(data).matches!==undefined)
+              {
+                gameId = JSON.parse(data).matches[0].gameId;
+                var plural = "games";
+                if(game == 1)
+                {
+                  plural = "game";
+                }
+                //get the deaths v
+                inGame = true;
+                https.get("https://na1.api.riotgames.com/lol/match/v4/matches/"+gameId+"?api_key="+key, (resp) => {
+                  let data = '';
+                  resp.on('data', (chunk) => {
+                    data += chunk;
+                  });
+                  resp.on('end', () => {
+                    var pid = 0;
+                    var champions = ["a","b","c","d","e","f","g","next","time","wont"];
+                    var kills = "error";
+                    var deaths = "error";
+                    var assist = "error";
+                    var win = " (loss) ";
+                    var duration = parseInt(JSON.parse(data).gameDuration)*1000;
+                    for(var i=0;i<10;i++)
+                    {
+                      champions[i] = allChamps[parseInt(JSON.parse(data).participants[i].championId)];
+                      var player = JSON.parse(data).participantIdentities[i].player.accountId;
+                    //  console.log(player+" vs "+accId);
+                      if(player == accId)
+                      {
+                        pid = i+1;
+                        var stats = JSON.parse(data).participants[i].stats;
+                        kills = stats.kills;
+                        deaths = stats.deaths
+                        assists = stats.assists;
+                        if(JSON.stringify(stats.win)=="true")
+                        {
+                          win = " (win) "
+                        }
+                      }
+                    }
+                    var deathsX = [];
+                    var deathsY = [];
+                    deathTimers.push(0); //for some reason it skips the first death sometimes idk
+                    deathsX.push(7500);
+                    deathsY.push(7500);
+                    var playerChamp = champions[parseInt(pid-1)];
+                    console.log("playing "+playerChamp+" game "+gameId);
+                    client.action("allouryesterdays", JSON.parse(playerChamp)+win+kills+"/"+deaths+"/"+assists);
+                    console.log("pid: "+pid);
+                    https.get("https://na1.api.riotgames.com/lol/match/v4/timelines/by-match/"+gameId+"?api_key="+key, (resp) => {
+                      let data = '';
+                      resp.on('data', (chunk) => {
+                        data += chunk;
+                      });
+                      resp.on('end', () => {
+                        var frames = JSON.parse(data).frames;
+                        var frame = frames[0];
+                        var i = 0;
+                        while(frame !== undefined)
+                        {
+                          var events = frame.events;
+                          var j = 0;
+                      //    console.log("on "+i);
+                          while(events[j] !== undefined)
+                          {
+                        //    console.log(" on "+j);
+                            var event = events[j];
+                            if(event.type == "CHAMPION_KILL" && event.victimId == pid)
+                            {
+                              mortal = true;
+                              var number = parseInt(event.killerId)-1;
+                              var killerChamp = "error";
+                              if(number == -1)
+                              {
+                                killerChamp = "Execute";
+                              }
+                              else
+                              {
+                                killerChamp = JSON.parse(champions[number]);
+                              }
+                              //get a bunch of stats to put while waiting for video to load
+                              var assists = event.assistingParticipantIds;
+                              var assisters = "";
+                              var dieAlone = 0;
+                              for(var n=0;n<4;n++)
+                              {
+                                if(assists[n] !== undefined)
+                                {
+                                  assisters = JSON.parse(champions[parseInt(assists[n])-1])+", "+assisters;
+                                  dieAlone++;
+                                }
+                              }
+                              assisters = assisters.substring(0,assisters.length-2);
+                              if(dieAlone == 0)
+                              {
+                                assisters = "";
+                              }
+                              else if(dieAlone > 1)
+                              {
+                                assisters = " (assists: "+assisters+")";
+                              }
+                              else
+                              {
+                                  assisters = " (assist: "+assisters+")";
+                              }
+                              var time = event.timestamp;
+                              deathTimers.push((time-10000)/duration);
+                              deathsX.push(event.position.x);
+                              deathsY.push(event.position.y);
+                        //      console.log("watch death at: "+(time/1000)/60+" at "+event.position.x+","+event.position.y);
+                              var sec = Math.floor(time/1000)%60;
+                              if(sec<10)
+                              {
+                                sec = "0"+sec;
+                              }
+                              var min = Math.floor(time/60000)%60;
+                              var hour = Math.floor(time/3600000)%24; // >league games lasting an hour in 2019 LuL
+                              if(hour==0)
+                              {
+                                hour = "";
+                              }
+                              else
+                              {
+                                hour = hour+":";
+                              }
+                              client.action("allouryesterdays", killerChamp+" killed "+JSON.parse(playerChamp)+" at "+hour+min+":"+sec+assisters);
+                            }
+                            j++;
+                            event = events[j];
+                          }
+                          i++;
+                          frame = frames[i];
+                        }
+                        if(!mortal)
+                        {
+                          client.action("allouryesterdays", "What do we say to the god of death?");
+                          client.action("allouryesterdays", "Not today");
+                        }
+                        else
+                        {
+                          deathTimers.push(1);
+                          deathsX.push(7500);
+                          deathsY.push(7500); //end game cause the fking key presses not registering
+                          process.env.LOLGAMEID = gameId; //gives gameid to curl command
+                          watchDeaths(deathTimers, deathsX, deathsY); //starts downloading/watching/jumping around replay
+                          deathsX = [];
+                          deathsY = [];
+                        }
+                      });
+                    }).on("error", (err) => {
+                    //  console.log("Error: " + err.message);
+                    });
+                  });
+                }).on("error", (err) => {
+                //  console.log("Error: " + err.message);
+                });
+                //get the deaths ^
+              }
+              else
+              {
+                client.action("allouryesterdays", "Usage: !death scarra or !death scarra/7 maybe you mistyped the name");
+              }
+            });
+          }).on("error", (err) => {
+          //  console.log("Error: " + err.message);
+            client.action("allouryesterdays", "Usage: !death scarra or !death scarra/7");
+          });
+          //get the matchlist ^
+        }
+      });
+    }).on("error", (err) => {
+    //  console.log("Error: " + err.message);
+      client.action("allouryesterdays", "Usage: !death scarra or !death scarra/7");
+    });
+}
+
+async function quitGame() //hits escape clicks exit then exit again
+{
+  robot.moveMouse(730,535);
+  robot.mouseToggle("down");
   setTimeout(function()
   {
-    robot.keyToggle("command","up");
-    robot.keyToggle("alt","up");
-    robot.keyToggle("escape","up");
-    console.log("quit");
-  }, 300);
+      robot.mouseToggle("up");
+
+  }, 1000);
 }
 
 function resolveN(seconds) { //seems glitchy sometmes, but actually waits for n seconds (unlike the rest of the confusing stuff on the internet)
@@ -31,36 +293,82 @@ function resolveN(seconds) { //seems glitchy sometmes, but actually waits for n 
   });
 }
 
-async function watchDeaths(times, follow) {
-  console.log(follow);
-  var lengthOfTime = rightOfTime-leftOfTime;
-  shell.exec('./watch.sh'); //starts downloading/watching the game
-  /*while(true)
+var replayReg = "NA1"; //na client only works on na? :D: D :D
+var gameId = "-1";
+
+//var startGame = ['160c07','160c05','160b05','160a05','160c05','170b06','170d06','170d05'];
+var screenSize = robot.getScreenSize();
+var height = screenSize.height;
+var width = screenSize.width;
+var lenX = maxX-minX;
+var lenY = maxY-minY;
+var lengthOfTime = rightOfTime-leftOfTime;
+async function watchDeaths(times, xpos, ypos) {
+  shell.exec('./download.sh');
+  const path = '/Users/david/documents/League of Legends/Replays/'+replayReg+"-"+gameId+".rofl";
+  var downloaded = false;
+  while(!downloaded)
   {
-      var mouse = robot.getMousePos();
-      console.log("Mouse is at x:" + mouse.x + " y:" + mouse.y);
-      var result = await resolveN(2);
-  }*/ //a highly scientific way of determining certain coordinates, akin to machine learning *except with humans and not learning
-  var result = await resolveN(45);
-  var screenSize = robot.getScreenSize();
-  var height = screenSize.height;
-  var width = screenSize.width;
-  console.log("follow "+follow);
-  robot.typeString(follow);
-  robot.keyTap("enter");
-  for(var i=0;i<times.length;i++)
-  {
-    var result = await resolveN(20);
-    var screenSize = robot.getScreenSize();
-    robot.moveMouse(leftOfTime+lengthOfTime*times[i],height*.95);
-    robot.mouseToggle("down");
-    setTimeout(function()
-    {
-        robot.mouseToggle("up");
-    }, 2000);
-    console.log(times[i]);
+    try {
+      if (fs.existsSync(path)) {
+        console.log("file exists, time to watch game")
+        downloaded = true;
+        shell.exec('./watch.sh'); //starts downloading/watching the game, "./" breaks windows
+        /*while(true)
+        {
+            var mouse = robot.getMousePos();
+            console.log("Mouse is at x:" + mouse.x + " y:" + mouse.y);
+            var result = await resolveN(2);
+        }*. //a highly scientific way of determining certain coordinates, akin to machine learning *except with humans and not learning
+      /*  for(var i=0;i<4;i++)
+        {
+          var portrait = robot.screen.capture(26+12, 12+132+86*i, 10, 10);
+          console.log(portrait.image);
+        }*/ //get the person by champ portrait?
+        var mouse = robot.getMousePos();
+        var hex = robot.getPixelColor(width/2, 5);
+        while(hex!="9c7f43")
+        {
+          var result = await resolveN(1);
+          hex = robot.getPixelColor(width/2, 5);
+          console.log(hex);
+        }
+        for(var i=0;i<times.length;i++)
+        {
+          console.log(times[i]+": "+xpos[i]+","+ypos[i]);
+          robot.moveMouse(leftOfTime+lengthOfTime*times[i],height*.95);
+          robot.mouseToggle("down");
+          setTimeout(function()
+          {
+              robot.mouseToggle("up");
+
+          }, 2000);
+          var waitabit = await resolveN(3);
+          var robotX = minX+lenX*xpos[i]/15000;
+          var robotY = minY+lenY*(1-ypos[i]/15000);
+          robot.moveMouse(robotX,robotY);
+          console.log(robot.getMousePos().x+","+robot.getMousePos().y);
+          robot.mouseToggle("down");
+          var trythis = await resolveN(12);
+          robot.mouseToggle("up");
+        }
+        quitGame();
+        inGame = false;
+        if(userQueue.length>0)
+        {
+          client.action("allouryesterdays", "on "+userQueue[0]);
+          parse(nameQueue[0],regionQueue[0],gameQueue[0]);
+          nameQueue.shift();
+          regionQueue.shift();
+          gameQueue.shift();
+          userQueue.shift();
+        }
+      }
+    } catch(err) {
+      console.error(err)
+    }
+    var lolmoedyingtokrackodyingandcrying = await resolveN(1); //wait until file downloaded to watch
   }
-  quitGame();
 }
 
 var allChamps = new Array(600);
@@ -98,7 +406,7 @@ var options = {
   },
   identity: {
     username: "todustydeath",
-    password: "oauth:n58lgu47pt7izw5t3bv0po7l91h4sp" //lets the bot log in to own channel
+    password: "oauth" //lets the bot log in to own channel
   },
   channels: ["allouryesterdays"] //channel for bot to to lurk in
 }
@@ -113,6 +421,14 @@ client.on('chat', function(channel, user, message, self) {
   if(lower == "!gandalf")
   {
     client.action("allouryesterdays", "https://www.youtube.com/watch?v=zGbZCgHQ9m8");
+  }
+  else if(lower == "!queue")
+  {
+    var len = userQueue.length;
+    for(var i=0;i<len;i++)
+    {
+      client.action("allouryesterdays", (i+1)+": "+userQueue[i]);
+    }
   }
   else if(lower == "!riot")
   {
@@ -184,7 +500,7 @@ client.on('chat', function(channel, user, message, self) {
   else if(lower.substring(0,6) == "!death")
   {
     var name;
-    var region;
+    var region = "NA1"; //xD na client is na only? maybe?
     var game;
     var str = lower.substring(6);
     if(str.charAt(0) == 's')
@@ -195,225 +511,64 @@ client.on('chat', function(channel, user, message, self) {
     {
       str = str.substring(1);
     }
-  //  console.log(str);
     var end = str.indexOf('/');
-    name = str.substring(0,end);
-    str = str.substring(end+1);
-    end = str.indexOf('/');
     if(end<0)
     {
-      region = str;
+      name = str;
       game = 1;
     }
     else
     {
-      region = str.substring(0,end);
+      name = str.substring(0,end);
       str = str.substring(end+1);
       game = parseInt(str);
     }
-    if(region=="na"||region=="north america"||region=="northamerica")
+    if(game!=game) //useful trick from professor kindlemann; he clearly thought his class would be entirely useless, but I showed him!
     {
-      region = "NA1"
+      client.action("allouryesterdays", "Usage: !death scarra or !death scarra/7");
     }
-    else if(region=="euw")
+    else
     {
-      region = "EUW1"
-    }
-    else if(region=="eun")
-    {
-      region = "EUN1"
-    }
-    else if(region=="br")
-    {
-      region = "BR1"
-    }
-    else if(region=="oce")
-    {
-      region = "OCE1"
-    }
-    else if(region=="jp")
-    {
-      region = "JP1"
-    }
-    else if(region=="tr")
-    {
-      region = "TR1"
-    }
-    else if(region=="la"||region=="lan")
-    {
-      region = "la2"
-    }
-    //get the account v
-    https.get("https://"+region+".api.riotgames.com/lol/summoner/v4/summoners/by-name/"+name+"?api_key="+key, (resp) => {
-      let data = '';
-      resp.on('data', (chunk) => {
-        data += chunk;
-      });
-      resp.on('end', () => {
-        var accId = JSON.parse(data).accountId;
-        if(accId == undefined)
+      var username = user.username;
+      var canStart = false;
+      var len = userQueue.length;
+      if(len>0) //actually this might be redundant because if the length>0 you're basically in game?
+      {
+        var inQ = false;
+        for(var c=0;c<len;c++)
         {
-          client.action("allouryesterdays", "Usage: !death scarra/na or !death scarra/na/7");
+          if(userQueue[c] == username)
+          {
+            client.action("allouryesterdays", username+" is already in line");
+            c = len;
+            inQ = true
+          }
         }
-        else if(game<1)
+        if(!inQ)
         {
-          client.action("allouryesterdays", "1 or more games ago, can't input <1");
+          nameQueue.push(name); //4 separate arrays very elegant xd
+          regionQueue.push(region);
+          gameQueue.push(game);
+          userQueue.push(username);
         }
-        else
-        {
-          //get the matchlist v
-          https.get("https://"+region+".api.riotgames.com/lol/match/v4/matchlists/by-account/"+accId+"?queue=420&endIndex="+game+"&beginIndex="+(game-1)+"&api_key="+key, (resp) => {
-            let data = '';
-            resp.on('data', (chunk) => {
-              data += chunk;
-            });
-            resp.on('end', () => {
-              var deathTimers = [];
-              var mortal = false;
-              var gameId = JSON.parse(data).matches[0].gameId;
-              var plural = "games";
-              if(game == 1)
-              {
-                plural = "game";
-              }
-              //get the deaths v
-              https.get("https://na1.api.riotgames.com/lol/match/v4/matches/"+gameId+"?api_key="+key, (resp) => {
-                let data = '';
-                resp.on('data', (chunk) => {
-                  data += chunk;
-                });
-                resp.on('end', () => {
-                  var pid = 0;
-                  var champions = ["a","b","c","d","e","f","g","next","time","wont"];
-                  var kills = "error";
-                  var deaths = "error";
-                  var assist = "error";
-                  var win = " (loss) ";
-                  var duration = parseInt(JSON.parse(data).gameDuration)*1000;
-                  for(var i=0;i<10;i++)
-                  {
-                    champions[i] = allChamps[parseInt(JSON.parse(data).participants[i].championId)];
-                    var player = JSON.parse(data).participantIdentities[i].player.accountId;
-                  //  console.log(player+" vs "+accId);
-                    if(player == accId)
-                    {
-                      pid = i+1;
-                      var stats = JSON.parse(data).participants[i].stats;
-                      kills = stats.kills;
-                      deaths = stats.deaths
-                      assists = stats.assists;
-                      console.log(stats.win);
-                      if(JSON.stringify(stats.win)=="true")
-                      {
-                        win = " (win) "
-                      }
-                    }
-                  }
-                  var playerChamp = champions[parseInt(pid-1)];
-                  client.action("allouryesterdays", JSON.parse(playerChamp)+win+kills+"/"+deaths+"/"+assists);
-                  console.log("pid: "+pid);
-                  https.get("https://na1.api.riotgames.com/lol/match/v4/timelines/by-match/"+gameId+"?api_key="+key, (resp) => {
-                    let data = '';
-                    resp.on('data', (chunk) => {
-                      data += chunk;
-                    });
-                    resp.on('end', () => {
-                      var frames = JSON.parse(data).frames;
-                      var frame = frames[0];
-                      var i = 0;
-                      while(frame !== undefined)
-                      {
-                        var events = frame.events;
-                        var event = events[0];
-                        var j = 0;
-                        while(event !== undefined)
-                        {
-                          if(event.type == "CHAMPION_KILL" && event.victimId == pid)
-                          {
-                            mortal = true;
-                            var killerChamp = champions[parseInt(event.killerId)-1]; //get a bunch of stats to put while waiting for video to load
-                            var assists = event.assistingParticipantIds;
-                            var assisters = "";
-                            var dieAlone = 0;
-                            for(var n=0;n<4;n++)
-                            {
-                              if(assists[n] !== undefined)
-                              {
-                                assisters = JSON.parse(champions[parseInt(assists[n])-1])+", "+assisters;
-                                dieAlone++;
-                              }
-                            }
-                            assisters = assisters.substring(0,assisters.length-2);
-                            if(dieAlone == 0)
-                            {
-                              assisters = "";
-                            }
-                            else if(dieAlone > 1)
-                            {
-                              assisters = " (assists: "+assisters+")";
-                            }
-                            else
-                            {
-                                assisters = " (assist: "+assisters+")";
-                            }
-                            var time = event.timestamp;
-                            deathTimers.push((time-13000)/duration);
-                      //      console.log("watch death at: "+(time/1000)/60+" at "+event.position.x+","+event.position.y);
-                            var sec = Math.floor(time/1000)%60;
-                            if(sec<10)
-                            {
-                              sec = "0"+sec;
-                            }
-                            var min = Math.floor(time/60000)%60;
-                            var hour = Math.floor(time/3600000)%24; // >league games lasting an hour in 2019 LuL
-                            if(hour==0)
-                            {
-                              hour = "";
-                            }
-                            else
-                            {
-                              hour = hour+":";
-                            }
-                            client.action("allouryesterdays", JSON.parse(killerChamp)+" killed "+JSON.parse(playerChamp)+" at "+hour+min+":"+sec+assisters);
-                          }
-                          j++;
-                          event = events[j];
-                        }
-                        i++;
-                        frame = frames[i];
-                      }
-                      if(!mortal)
-                      {
-                        client.action("allouryesterdays", "What do we say to the god of death?");
-                        client.action("allouryesterdays", "Not today");
-                      }
-                      else
-                      {
-                        process.env.LOLGAMEID = gameId; //gives gameid to curl command
-                        console.log(pid+" "+pidToWatch[pid-1]);
-                        watchDeaths(deathTimers, pidToWatch[pid-1]); //starts downloading/watching/jumping around replay
-                      }
-                    });
-                  }).on("error", (err) => {
-                  //  console.log("Error: " + err.message);
-                  });
-                });
-              }).on("error", (err) => {
-              //  console.log("Error: " + err.message);
-              });
-              //get the deaths ^
-            });
-          }).on("error", (err) => {
-          //  console.log("Error: " + err.message);
-            client.action("allouryesterdays", "Usage: !death scarra/na or !death scarra/na/7");
-          });
-          //get the matchlist ^
-        }
-      });
-    }).on("error", (err) => {
-    //  console.log("Error: " + err.message);
-      client.action("allouryesterdays", "Usage: !death scarra/na or !death scarra/na/7");
-    });
+      }
+      else if(inGame)
+      {
+        nameQueue.push(name); //4 separate arrays very elegant xd
+        regionQueue.push(region);
+        gameQueue.push(game);
+        userQueue.push(username);
+        client.action("allouryesterdays", "game ongoing; "+username+" added to queue");
+      }
+      else
+      {
+        canStart = true;
+      }
+      if(canStart)
+      {
+          parse(name,region,game);
+      }
+    }
   }
 });
 
