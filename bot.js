@@ -101,6 +101,7 @@ function parse(name,region,game)
                 gameId = JSON.parse(data).matches[0].gameId;
                 var fileContents = [];
                 var fileName = "./cache/"+gameId+accId;
+                inGame = true;
                 if (fs.existsSync(fileName))
                 {
                     console.log(fileName+" in cache");
@@ -162,14 +163,8 @@ function parse(name,region,game)
                             console.log("push "+stuff[s]+" length "+champsInvolved.length);
                           }
                         }
-                        deathTimers.push(1);
-                        deathsX.push(7500);
-                        deathsY.push(7500);
                         if(deathTimers.length>2)
                         {
-                          deathTimers.push(1);
-                          deathsX.push(7500);
-                          deathsY.push(7500); //end game cause the fking key presses not registering
                           process.env.LOLGAMEID = gameId; //gives gameid to curl command
                           watchDeaths(deathTimers, deathsX, deathsY); //starts downloading/watching/jumping around replay
                           deathsX = [];
@@ -191,7 +186,6 @@ function parse(name,region,game)
                     plural = "game";
                   }
                   //get the deaths v
-                  inGame = true;
                   https.get("https://na1.api.riotgames.com/lol/match/v4/matches/"+gameId+"?api_key="+key, (resp) => {
                     let data = '';
                     resp.on('data', (chunk) => {
@@ -331,9 +325,6 @@ function parse(name,region,game)
                           }
                           else
                           {
-                            deathTimers.push(1);
-                            deathsX.push(7500);
-                            deathsY.push(7500); //end game cause the fking key presses not registering
                             process.env.LOLGAMEID = gameId; //gives gameid to curl command
                             watchDeaths(deathTimers, deathsX, deathsY); //starts downloading/watching/jumping around replay
                             deathsX = [];
@@ -368,15 +359,15 @@ function parse(name,region,game)
     });
 }
 
-async function quitGame() //hits escape clicks exit then exit again
+function quitGame()
 {
-  robot.moveMouse(730,535);
-  robot.mouseToggle("down");
-  setTimeout(function()
+  shell.exec('./kill.sh');
+  inGame = false;
+  if(userQueue.length>0)
   {
-      robot.mouseToggle("up");
-
-  }, 1000);
+    client.action("allouryesterdays", "on "+userQueue.shift());
+    parse(nameQueue.shift(),regionQueue.shift(),gameQueue.shift());
+  }
 }
 
 function resolveN(seconds) { //seems glitchy sometmes, but actually waits for n seconds (unlike the rest of the confusing stuff on the internet)
@@ -443,16 +434,13 @@ async function watchDeaths(times, xpos, ypos) {
           robot.moveMouse(robotX,robotY);
           console.log(robot.getMousePos().x+","+robot.getMousePos().y);
           robot.mouseToggle("down");
-          var trythis = await resolveN(12);
+          if(i>0)
+          {
+            var trythis = await resolveN(12);
+          }
           robot.mouseToggle("up");
         }
         quitGame();
-        inGame = false;
-        if(userQueue.length>0)
-        {
-          client.action("allouryesterdays", "on "+userQueue.shift());
-          parse(nameQueue.shift(),regionQueue.shift(),gameQueue.shift());
-        }
       }
     } catch(err) {
       console.error(err)
@@ -516,7 +504,7 @@ var options = {
   },
   identity: {
     username: "todustydeath",
-    password: "oauth:OAUTH" //lets the bot log in to own channel
+    password: "OAUTH" //lets the bot log in to own channel
   },
   channels: ["allouryesterdays"] //channel for bot to to lurk in
 }
