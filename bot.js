@@ -1,11 +1,10 @@
-var key = "key";
+var key = "KEY";
 var tmi = require('tmi.js'); //what does this do? I don't know. Ask this guy https://www.youtube.com/watch?v=K6N9dSMb7sM
 const https = require('https');
 var shell = require('shelljs'); //to run curl. this might not be necessary if I knew what I was doing or the internet was helpful
 var robot = require("robotjs"); //actually amazing this exists, lets the program move mouse/type keys as if you were doing it yourself
 const fs = require('fs') //check if file exists
 
-var pidToWatch = ['1','2','3','4','5','q','w','e','r','t']; //remember pick order ty DrCyanide (NA)
 var leftOfTime = 509; //quality scaleable code to determine where to put the cursor on the timeline
 var rightOfTime = 1013;
 var minX = 1220;
@@ -100,143 +99,73 @@ function parse(name,region,game)
               if(JSON.parse(data).matches!==undefined)
               {
                 gameId = JSON.parse(data).matches[0].gameId;
-                var plural = "games";
-                if(game == 1)
+                var fileContents = [];
+                var fileName = "./cache/"+gameId+accId;
+                if (fs.existsSync(fileName))
                 {
-                  plural = "game";
-                }
-                //get the deaths v
-                inGame = true;
-                https.get("https://na1.api.riotgames.com/lol/match/v4/matches/"+gameId+"?api_key="+key, (resp) => {
-                  let data = '';
-                  resp.on('data', (chunk) => {
-                    data += chunk;
-                  });
-                  resp.on('end', () => {
-                    var pid = 0;
-                    var champions = ["a","b","c","d","e","f","g","next","time","wont"];
-                    var kills = "error";
-                    var deaths = "error";
-                    var assist = "error";
-                    var win = " (loss) ";
-                    var duration = parseInt(JSON.parse(data).gameDuration)*1000;
-                    for(var i=0;i<10;i++)
-                    {
-                      champions[i] = allChamps[parseInt(JSON.parse(data).participants[i].championId)];
-                      var player = JSON.parse(data).participantIdentities[i].player.accountId;
-                    //  console.log(player+" vs "+accId);
-                      if(player == accId)
-                      {
-                        pid = i+1;
-                        var stats = JSON.parse(data).participants[i].stats;
-                        kills = stats.kills;
-                        deaths = stats.deaths
-                        assists = stats.assists;
-                        if(JSON.stringify(stats.win)=="true")
+                    console.log(fileName+" in cache");
+                    fs.readFile(fileName, 'utf8', function(err, data) {
+                        if (err) throw err;
+                        var nextComma = data.indexOf(",");
+                        var stuff = [];
+                        while(nextComma>0)
                         {
-                          win = " (win) "
+                          stuff.push(data.substring(0,nextComma));
+                          data = data.substring(nextComma+1);
+                          nextComma = data.indexOf(",");
                         }
-                      }
-                    }
-                    var deathsX = [];
-                    var deathsY = [];
-                    deathTimers.push(0); //for some reason it skips the first death sometimes idk
-                    deathsX.push(7500);
-                    deathsY.push(7500);
-                    var playerChamp = champions[parseInt(pid-1)];
-                    console.log("playing "+playerChamp+" game "+gameId);
-                    client.action("allouryesterdays", JSON.parse(playerChamp)+win+kills+"/"+deaths+"/"+assists);
-                    console.log("pid: "+pid);
-                    https.get("https://na1.api.riotgames.com/lol/match/v4/timelines/by-match/"+gameId+"?api_key="+key, (resp) => {
-                      let data = '';
-                      resp.on('data', (chunk) => {
-                        data += chunk;
-                      });
-                      resp.on('end', () => {
-                        var frames = JSON.parse(data).frames;
-                        var frame = frames[0];
-                        var i = 0;
-                        while(frame !== undefined)
+                        var duration = stuff.shift();
+                        var kills = stuff.shift();
+                        var deaths = stuff.shift();
+                        var assists = stuff.shift();
+                        var win = stuff.shift();
+                        var playerChamp = stuff.shift();
+                        client.action("allouryesterdays", JSON.parse(playerChamp)+win+kills+"/"+deaths+"/"+assists);
+                        var deathsX = [];
+                        var deathsY = [];
+                        deathTimers.push(0); //for some reason it skips the first death sometimes idk
+                        deathsX.push(7500);
+                        deathsY.push(7500);
+                        var length = stuff.length;
+                        var champsInvolved = [];
+                        for(var s=0;s<length;s++)
                         {
-                          var events = frame.events;
-                          var j = 0;
-                      //    console.log("on "+i);
-                          while(events[j] !== undefined)
+                          if(parseInt(stuff[s])-1+1==stuff[s])
                           {
-                        //    console.log(" on "+j);
-                            var event = events[j];
-                            if(event.type == "CHAMPION_KILL" && event.victimId == pid)
+                            console.log(s+" is number");
+                            var time = stuff[s];
+                            deathTimers.push((time-10000)/duration);
+                            deathsX.push(stuff[s+1]);
+                            deathsY.push(stuff[s+2]);
+                            s = s+2;
+                            var champs = champsInvolved.length;
+                            var assisters = "";
+                            if(champs == 1)
                             {
-                              mortal = true;
-                              var number = parseInt(event.killerId)-1;
-                              var killerChamp = "error";
-                              if(number == -1)
-                              {
-                                killerChamp = "Execute";
-                              }
-                              else
-                              {
-                                killerChamp = JSON.parse(champions[number]);
-                              }
-                              //get a bunch of stats to put while waiting for video to load
-                              var assists = event.assistingParticipantIds;
-                              var assisters = "";
-                              var dieAlone = 0;
-                              for(var n=0;n<4;n++)
-                              {
-                                if(assists[n] !== undefined)
-                                {
-                                  assisters = JSON.parse(champions[parseInt(assists[n])-1])+", "+assisters;
-                                  dieAlone++;
-                                }
-                              }
-                              assisters = assisters.substring(0,assisters.length-2);
-                              if(dieAlone == 0)
-                              {
-                                assisters = "";
-                              }
-                              else if(dieAlone > 1)
-                              {
-                                assisters = " (assists: "+assisters+")";
-                              }
-                              else
-                              {
-                                  assisters = " (assist: "+assisters+")";
-                              }
-                              var time = event.timestamp;
-                              deathTimers.push((time-10000)/duration);
-                              deathsX.push(event.position.x);
-                              deathsY.push(event.position.y);
-                        //      console.log("watch death at: "+(time/1000)/60+" at "+event.position.x+","+event.position.y);
-                              var sec = Math.floor(time/1000)%60;
-                              if(sec<10)
-                              {
-                                sec = "0"+sec;
-                              }
-                              var min = Math.floor(time/60000)%60;
-                              var hour = Math.floor(time/3600000)%24; // >league games lasting an hour in 2019 LuL
-                              if(hour==0)
-                              {
-                                hour = "";
-                              }
-                              else
-                              {
-                                hour = hour+":";
-                              }
-                              client.action("allouryesterdays", killerChamp+" killed "+JSON.parse(playerChamp)+" at "+hour+min+":"+sec+assisters);
+                              assisters = " (assist: ";
                             }
-                            j++;
-                            event = events[j];
+                            else if (champs > 1)
+                            {
+                              assisters = " (assists: ";
+                            }
+                            for(var c=0;c<champs-1;c++)
+                            {
+                              assisters = assisters+JSON.parse(champsInvolved[c])+", "; //make assisters the proper (assist(s):...)
+                            }
+                            assisters = assisters.substring(0,assisters.length-2);
+                            printDeath(time,playerChamp,champsInvolved[champs-1],assisters+")");
+                            champsInvolved = [];
                           }
-                          i++;
-                          frame = frames[i];
+                          else
+                          {
+                            champsInvolved.push(stuff[s]);
+                            console.log("push "+stuff[s]+" length "+champsInvolved.length);
+                          }
                         }
-                        if(!mortal)
-                        {
-                          client.action("allouryesterdays", "What do we say to the god of death?");
-                          client.action("allouryesterdays", "Not today");
-                        }
-                        else
+                        deathTimers.push(1);
+                        deathsX.push(7500);
+                        deathsY.push(7500);
+                        if(deathTimers.length>2)
                         {
                           deathTimers.push(1);
                           deathsX.push(7500);
@@ -246,15 +175,180 @@ function parse(name,region,game)
                           deathsX = [];
                           deathsY = [];
                         }
-                      });
-                    }).on("error", (err) => {
-                    //  console.log("Error: " + err.message);
+                        else
+                        {
+                          client.action("allouryesterdays", "What do we say to the god of death?");
+                          client.action("allouryesterdays", "Not today");
+                        }
                     });
+                }
+                else
+                {
+                  console.log(fileName+" not in cache");
+                  var plural = "games";
+                  if(game == 1)
+                  {
+                    plural = "game";
+                  }
+                  //get the deaths v
+                  inGame = true;
+                  https.get("https://na1.api.riotgames.com/lol/match/v4/matches/"+gameId+"?api_key="+key, (resp) => {
+                    let data = '';
+                    resp.on('data', (chunk) => {
+                      data += chunk;
+                    });
+                    resp.on('end', () => {
+                      var pid = 0;
+                      var champions = ["a","b","c","d","e","f","g","next","time","wont"];
+                      var kills = "error";
+                      var deaths = "error";
+                      var assist = "error";
+                      var win = " (loss) ";
+                      var duration = parseInt(JSON.parse(data).gameDuration)*1000;
+                      fileContents.push(duration);
+                      for(var i=0;i<10;i++)
+                      {
+                        champions[i] = allChamps[parseInt(JSON.parse(data).participants[i].championId)];
+                        var player = JSON.parse(data).participantIdentities[i].player.accountId;
+                      //  console.log(player+" vs "+accId);
+                        if(player == accId)
+                        {
+                          pid = i+1;
+                          var stats = JSON.parse(data).participants[i].stats;
+                          kills = stats.kills;
+                          deaths = stats.deaths
+                          assists = stats.assists;
+                          if(JSON.stringify(stats.win)=="true")
+                          {
+                            win = " (win) "
+                          }
+                          fileContents.push(kills);
+                          fileContents.push(deaths);
+                          fileContents.push(assists);
+                          fileContents.push(win);
+                        }
+                      }
+                      var deathsX = [];
+                      var deathsY = [];
+                      deathTimers.push(0); //for some reason it skips the first death sometimes idk
+                      deathsX.push(7500);
+                      deathsY.push(7500);
+                      var playerChamp = champions[parseInt(pid-1)];
+                      fileContents.push(playerChamp);
+                      console.log("playing "+playerChamp+" game "+gameId);
+                      client.action("allouryesterdays", JSON.parse(playerChamp)+win+kills+"/"+deaths+"/"+assists);
+                      console.log("pid: "+pid);
+                      https.get("https://na1.api.riotgames.com/lol/match/v4/timelines/by-match/"+gameId+"?api_key="+key, (resp) => {
+                        let data = '';
+                        resp.on('data', (chunk) => {
+                          data += chunk;
+                        });
+                        resp.on('end', () => {
+                          var frames = JSON.parse(data).frames;
+                          var frame = frames[0];
+                          var i = 0;
+                          while(frame !== undefined)
+                          {
+                            var events = frame.events;
+                            var j = 0;
+                        //    console.log("on "+i);
+                            while(events[j] !== undefined)
+                            {
+                          //    console.log(" on "+j);
+                              var event = events[j];
+                              if(event.type == "CHAMPION_KILL" && event.victimId == pid)
+                              {
+                                mortal = true;
+                                var number = parseInt(event.killerId)-1;
+                                var killerChamp = "error";
+                                if(number == -1)
+                                {
+                                  killerChamp = "Execute";
+                                }
+                                else
+                                {
+                                  killerChamp = JSON.parse(champions[number]);
+                                }
+                                //get a bunch of stats to put while waiting for video to load
+                                var assists = event.assistingParticipantIds;
+                                var assisters = "";
+                                var dieAlone = 0;
+                                for(var n=0;n<4;n++)
+                                {
+                                  if(assists[n] !== undefined)
+                                  {
+                                    var assistChamp = champions[parseInt(assists[n])-1];
+                                    fileContents.push(assistChamp);
+                                    assisters = JSON.parse(assistChamp)+", "+assisters;
+                                    dieAlone++;
+                                  }
+                                }
+                                assisters = assisters.substring(0,assisters.length-2);
+                                if(dieAlone == 0)
+                                {
+                                  assisters = "";
+                                }
+                                else if(dieAlone > 1)
+                                {
+                                  assisters = " (assists: "+assisters+")";
+                                }
+                                else
+                                {
+                                    assisters = " (assist: "+assisters+")";
+                                }
+                                var time = event.timestamp;
+                                deathTimers.push((time-10000)/duration);
+                                deathsX.push(event.position.x);
+                                deathsY.push(event.position.y);
+                                printDeath(time,playerChamp,killerChamp,assisters);
+                                fileContents.push(killerChamp);
+                                fileContents.push(time);
+                                fileContents.push(event.position.x);
+                                fileContents.push(event.position.y);
+                              }
+                              j++;
+                              event = events[j];
+                            }
+                            i++;
+                            frame = frames[i];
+                          }
+                          var gameInfo = "";
+                          var info = fileContents.length;
+                          for(var add=0;add<info;add++)
+                          {
+                            gameInfo = gameInfo + fileContents[add]+",";
+                          }
+                          fs.writeFile(fileName, gameInfo, function(err) {
+                            if(err) {
+                              return console.log(err);
+                            }
+                            console.log("saved "+fileName);
+                          });
+                          if(!mortal)
+                          {
+                            client.action("allouryesterdays", "What do we say to the god of death?");
+                            client.action("allouryesterdays", "Not today");
+                          }
+                          else
+                          {
+                            deathTimers.push(1);
+                            deathsX.push(7500);
+                            deathsY.push(7500); //end game cause the fking key presses not registering
+                            process.env.LOLGAMEID = gameId; //gives gameid to curl command
+                            watchDeaths(deathTimers, deathsX, deathsY); //starts downloading/watching/jumping around replay
+                            deathsX = [];
+                            deathsY = [];
+                          }
+                        });
+                      }).on("error", (err) => {
+                      //  console.log("Error: " + err.message);
+                      });
+                    });
+                  }).on("error", (err) => {
+                  //  console.log("Error: " + err.message);
                   });
-                }).on("error", (err) => {
-                //  console.log("Error: " + err.message);
-                });
-                //get the deaths ^
+                  //get the deaths ^
+                }
               }
               else
               {
@@ -356,12 +450,8 @@ async function watchDeaths(times, xpos, ypos) {
         inGame = false;
         if(userQueue.length>0)
         {
-          client.action("allouryesterdays", "on "+userQueue[0]);
-          parse(nameQueue[0],regionQueue[0],gameQueue[0]);
-          nameQueue.shift();
-          regionQueue.shift();
-          gameQueue.shift();
-          userQueue.shift();
+          client.action("allouryesterdays", "on "+userQueue.shift());
+          parse(nameQueue.shift(),regionQueue.shift(),gameQueue.shift());
         }
       }
     } catch(err) {
@@ -369,6 +459,26 @@ async function watchDeaths(times, xpos, ypos) {
     }
     var lolmoedyingtokrackodyingandcrying = await resolveN(1); //wait until file downloaded to watch
   }
+}
+
+function printDeath(time, playerChamp, killerChamp, assisters)
+{
+  var sec = Math.floor(time/1000)%60;
+  if(sec<10)
+  {
+    sec = "0"+sec;
+  }
+  var min = Math.floor(time/60000)%60;
+  var hour = Math.floor(time/3600000)%24; // >league games lasting an hour in 2019 LuL
+  if(hour==0)
+  {
+    hour = "";
+  }
+  else
+  {
+    hour = hour+":";
+  }
+  client.action("allouryesterdays", killerChamp+" killed "+JSON.parse(playerChamp)+" at "+hour+min+":"+sec+assisters);
 }
 
 var allChamps = new Array(600);
@@ -406,7 +516,7 @@ var options = {
   },
   identity: {
     username: "todustydeath",
-    password: "oauth" //lets the bot log in to own channel
+    password: "oauth:OAUTH" //lets the bot log in to own channel
   },
   channels: ["allouryesterdays"] //channel for bot to to lurk in
 }
