@@ -1,9 +1,10 @@
-var key = "RGAPI-0acc386a-401d-42e3-aecf-cd9564a38bc8";
+var key = "RGAPI-501423ec-7b11-4163-8470-3a25f6d478d9";
 var tmi = require('tmi.js'); //what does this do? I don't know. Ask this guy https://www.youtube.com/watch?v=K6N9dSMb7sM
 const https = require('https');
 var shell = require('shelljs'); //to run curl. this might not be necessary if I knew what I was doing or the internet was helpful
 var robot = require("robotjs"); //actually amazing this exists, lets the program move mouse/type keys as if you were doing it yourself
 const fs = require('fs') //check if file exists
+var process = require('process'); //restart if glitchy
 
 var leftOfTime = 509; //quality scaleable code to determine where to put the cursor on the timeline
 var rightOfTime = 1013;
@@ -388,12 +389,20 @@ var width = screenSize.width;
 var lenX = maxX-minX;
 var lenY = maxY-minY;
 var lengthOfTime = rightOfTime-leftOfTime;
+var waitUntil = 60;
+var waiting = 0;
 async function watchDeaths(times, xpos, ypos) {
   shell.exec('./download.sh');
   const path = '/Users/david/documents/League of Legends/Replays/'+replayReg+"-"+gameId+".rofl";
   var downloaded = false;
   while(!downloaded)
   {
+    /*waiting++;
+    if(waiting==waitUntil)
+    {
+      process.env.BOTID = process.pid; //gives gameid to curl command
+      shell.exec('./timeout.sh'); //restart the thing if not loading in a minute
+    }*/
     try {
       if (fs.existsSync(path)) {
         console.log("file exists, time to watch game")
