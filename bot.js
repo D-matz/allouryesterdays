@@ -1,4 +1,4 @@
-var key = "KEY";
+var key = "RGAPI-0acc386a-401d-42e3-aecf-cd9564a38bc8";
 var tmi = require('tmi.js'); //what does this do? I don't know. Ask this guy https://www.youtube.com/watch?v=K6N9dSMb7sM
 const https = require('https');
 var shell = require('shelljs'); //to run curl. this might not be necessary if I knew what I was doing or the internet was helpful
@@ -163,7 +163,7 @@ function parse(name,region,game)
                             console.log("push "+stuff[s]+" length "+champsInvolved.length);
                           }
                         }
-                        if(deathTimers.length>2)
+                        if(deathTimers.length>1)
                         {
                           process.env.LOLGAMEID = gameId; //gives gameid to curl command
                           watchDeaths(deathTimers, deathsX, deathsY); //starts downloading/watching/jumping around replay
@@ -504,7 +504,7 @@ var options = {
   },
   identity: {
     username: "todustydeath",
-    password: "OAUTH" //lets the bot log in to own channel
+    password: "oauth:5f9n1oznwltq9ih3dau3v3lv0rpgba" //lets the bot log in to own channel
   },
   channels: ["allouryesterdays"] //channel for bot to to lurk in
 }
